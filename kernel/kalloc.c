@@ -9,7 +9,10 @@
 #include "riscv.h"
 #include "defs.h"
 
+extern uint64 cas(volatile void *addr, int expected, int newval);
+
 #define PA2IDX(pa) (((uint64)pa) >> 12)
+#define NUM_PYS_PAGES ((PHYSTOP-KERNBASE) / PGSIZE) //todo
 
 int references[PA2IDX(PHYSTOP)];
 struct spinlock r_lock;
@@ -34,24 +37,27 @@ reference_find(uint64 pa)
   return references[PA2IDX(pa)];
 }
 
-int
-reference_add(uint64 pa)
-{
-  int ref;
-  acquire(&r_lock);
-  ref = ++references[PA2IDX(pa)];
-  release(&r_lock); 
-  return ref;
+extern int
+reference_add(uint64 pa){
+  int old_ref;
+  do
+  {
+    old_ref = references[PA2IDX(pa)];
+  }
+  while (cas(&references[PA2IDX(pa)],old_ref, old_ref+1));
+  return references[PA2IDX(pa)];;
 }
 
 int
 reference_remove(uint64 pa)
 {
-  int ref;
-  acquire(&r_lock);
-  ref = --references[PA2IDX(pa)];
-  release(&r_lock);
-  return ref;
+  int old_ref;
+  do
+  {
+    old_ref = references[PA2IDX(pa)];
+  }
+  while (cas(&references[PA2IDX(pa)],old_ref, old_ref-1));
+  return references[PA2IDX(pa)];;
 }
 
 void
